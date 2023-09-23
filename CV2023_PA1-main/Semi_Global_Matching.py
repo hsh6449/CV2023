@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 import os
 
-from similarity import Birchfield_Tomasi_dissimilarity, SAD
+from similarity import Birchfield_Tomasi_dissimilarity, SAD, SSD
 from aggregate_cost_volume import aggregate_cost_volume
 from warp import warp_image
 
@@ -14,15 +14,15 @@ from warp import warp_image
 def semi_global_matching(left_image, right_image, d):
     # TODO: Implement Semi-Global Matching
 
-    raise NotImplementedError("Semi_Global_Matching function has not been implemented yet")
-
-    left_cost_volume, right_cost_volume, left_disparity, right_disparity = Birchfield_Tomasi_dissimilarity(left_image, right_image, d)
+    # left_cost_volume, right_cost_volume, left_disparity, right_disparity = Birchfield_Tomasi_dissimilarity(left_image, right_image, d)
+    left_cost_volume, right_cost_volume, left_disparity, right_disparity = SSD(
+        left_image, right_image, d)
 
     # TODO: save cost disparity
 
-    cost_volume = None
+    cost_volume = (left_cost_volume, right_cost_volume)
     aggregated_cost_volume = aggregate_cost_volume(cost_volume)
-    aggregated_disparity = aggregated_cost_volume.argmin(axis=2)
+    aggregated_disparity = aggregated_cost_volume.argmin(axis=0)
 
     # TODO: save Semi Global Matching disparity
 
@@ -44,7 +44,8 @@ if __name__ == "__main__":
         pass
 
     boundary_range = d
-    cropped_ground_truth = ground_truth[boundary_range:-boundary_range, boundary_range:-boundary_range]
+    cropped_ground_truth = ground_truth[boundary_range:-
+                                        boundary_range, boundary_range:-boundary_range]
 
     # TODO: Aggregate warped images
 
