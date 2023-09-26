@@ -1,11 +1,10 @@
 ## PA1 : Multi Image Denoising
 
-### 황산하 (20231126)
-
-### AI대학원
+### 황산하 (20231126), GIST AI대학원
 
 - 본 폴더의 구성은 다음과 같습니다.
-  CV2023*PA1_MAIN
+```
+  CV2023_PA1-MAIN
   ├── input, other_input : input images
   │
   │── output
@@ -23,7 +22,7 @@
   ├── similarity.py : calculate disparity (SAD, SSD)
   ├── test.py : roughly test some function
   └── warp.py : Image warping code
-
+```
 - 따라서 본 폴더로 디렉토리를 변경한 후 (./CV2023_PA1-MAIN/) 아래의 코드를 스크립트에서 실행하면 됩니다.
 
 ```
