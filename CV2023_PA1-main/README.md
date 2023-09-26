@@ -10,6 +10,7 @@
   │── output
   │ ├── Cost : MSE & PSNR
   │ ├── Final_Disparity : Final Disparity (array)
+  │ ├── Warped_images : Warped_images (png)
   │ ├── Intermediate_Disparity : Disparities of Each images (input)  
   │ └── agg_warped_image*{date}.png # final output
   │  
