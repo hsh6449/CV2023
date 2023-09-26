@@ -1,47 +1,38 @@
 import numpy as np
 import cv2
 
-INF = 999999999
-
-
-def Birchfield_Tomasi_dissimilarity(left_image, right_image, d):
-    # TODO: Implement Birchfield-Tomasi dissimilarity
-    # Hint: Fill undefined elements with np.inf at the end
-
-    raise NotImplementedError(
-        "Birchfield_Tomasi_dissimilarity function has not been implemented yet")
-
-    left_cost_volume = None
-    right_cost_volume = None
-
-    left_disparity = left_cost_volume.argmin(axis=2)
-    right_disparity = right_cost_volume.argmin(axis=2)
-
-    return left_cost_volume, right_cost_volume, left_disparity, right_disparity
+INF = 999999999  # Set Infinte value
 
 
 def SAD(left_image, right_image, d):
     """
-    i) image는 일단 gray scale로 받아옴
-    ii) 
+    Sum of Absolute Differences
+
+    left_image : gray scale image (H, W)
+    right_image : Reference gray scale image (H, W)
+    d : Depth
+
     """
     global INF
 
+    # INF 로 Cost Volume과 shape이 같은 array 생성 (left, right 둘 다)
+    # Expected Cost Volume의 shape은 (d, H, W), 이번 과제의 경우는 (24, 215, 328)
+
     left_cost_volume = np.full(
-        (d, 215, 328), INF)  # Max value로 full array 생성
+        (d, 215, 328), INF)
     right_cost_volume = np.full((d, 215, 328), INF)
 
+    # 왼쪽에서 오른쪽으로 이동하면서 disparity 계산
     for i in range(d):
         disparity = left_image[:, i:] - right_image[:, : 328-i]
         left_cost_volume[i, :, i:] = abs(disparity)
 
+    # 오른쪽에서 왼쪽으로 이동하면서 disparity 계산
     for i in range(d):
         disparity = right_image[:, i:] - left_image[:, : 328-i]
         right_cost_volume[i, :, :328-i] = abs(disparity)
 
-    # left_cost_volume = None
-    # right_cost_volume = None
-
+    # SAD를 이용해 계산한 Disparity
     left_disparity = left_cost_volume.argmin(axis=0)
     right_disparity = right_cost_volume.argmin(axis=0)
 
@@ -49,24 +40,32 @@ def SAD(left_image, right_image, d):
 
 
 def SSD(left_image, right_image, d):
+    """
+    Sum of Square Differences
+
+    left_image : gray scale image (H, W)
+    right_image : Reference gray scale image (H, W)
+    d : Depth
+
+    """
 
     global INF
 
-    # Max value로 full array 생성
+    # INF 로 Cost Volume과 shape이 같은 array 생성 (left, right 둘 다)
     left_cost_volume = np.full((d, 215, 328), INF)
     right_cost_volume = np.full((d, 215, 328), INF)
 
+    # 왼쪽에서 오른쪽으로 이동하면서 disparity 계산
     for i in range(d):
         disparity = left_image[:, i:] - right_image[:, : 328-i]
         left_cost_volume[i, :, i:] = np.square(disparity)
 
+    # 오른쪽에서 왼쪽으로 이동하면서 disparity 계산
     for i in range(d):
         disparity = right_image[:, i:] - left_image[:, : 328-i]
         right_cost_volume[i, :, :328-i] = np.square(disparity)
 
-    # left_cost_volume = None
-    # right_cost_volume = None
-
+    # SSD를 이용해 계산한 Disparity
     left_disparity = left_cost_volume.argmin(axis=0)
     right_disparity = right_cost_volume.argmin(axis=0)
 

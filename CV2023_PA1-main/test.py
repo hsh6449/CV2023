@@ -14,8 +14,8 @@ image_r = cv2.imread('input/07_noise25.png', 0)
 image_lm = cv2.imread('input/01_noise25.png', -1)
 
 
-left_cost_volume, right_cost_volume, left_disparity, right_disparity = SAD(
-    image_l, image_c, 24)
+# left_cost_volume, right_cost_volume, left_disparity, right_disparity = SAD(
+#     image_l, image_c, 24)
 
 # left_cost_volume2, right_cost_volume2, left_disparity2, right_disparity2 = SSD(
 #     image_l, image_c, 24)
@@ -26,18 +26,18 @@ left_cost_volume, right_cost_volume, left_disparity, right_disparity = SAD(
 
 # agg_temp = np.min(left_cost_volume, axis=0)
 
-# sample_disparity = cv2.imread(left_disparity, 0)
-# cv2.imshow("disparity", (right_disparity*10).astype(np.uint8))
-# cv2.imshow("disparity", (left_disparity2*10).astype(np.uint8))
-# cv2.waitKey(0)
+sample_disparity = np.load(
+    "output/Final_Disparity/agg_disparity_1695702462.5508597.npy")
+cv2.imshow("disparity", (sample_disparity*10).astype(np.uint8))
+cv2.waitKey(0)
 
 # test code
-forward_pass = generate_cor_pass(left_cost_volume, size=1)
-a = semi_global_matching(image_l, image_r, 24)
-print("aggregated_disparity : ", a.shape)
+# forward_pass = generate_cor_pass(left_cost_volume, size=1)
+# a = semi_global_matching(image_l, image_r, 24)
+# print("aggregated_disparity : ", a.shape)
 
-warped_image = warp_image(image_lm, a, loc='left')
-print(warped_image)
+# warped_image = warp_image(image_lm, a, loc='left')
+# print(warped_image)
 
 # print(-np.zeros((24, 215, 328)))
 
@@ -47,5 +47,5 @@ print(warped_image)
 # modified2 = cv2.cvtColor(modified, cv2.COLOR_GRAY2RGB)
 
 # print(modified2.shape)
-cv2.imshow("test", (warped_image).astype(np.uint8))
-cv2.waitKey(0)
+# cv2.imshow("test", (warped_image).astype(np.uint8))
+# cv2.waitKey(0)
