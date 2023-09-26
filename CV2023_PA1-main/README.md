@@ -3,6 +3,7 @@
 ### 황산하 (20231126), GIST AI대학원
 
 - 본 폴더의 구성은 다음과 같습니다.
+  - output의 각 폴더는 prior result가 있어서 이전의 결과물들을 아카이빙 했습니다. 
 ```
   CV2023_PA1-MAIN
   ├── input, other_input : input images
@@ -10,6 +11,7 @@
   │── output
   │ ├── Cost : MSE & PSNR
   │ ├── Final_Disparity : Final Disparity (array)
+  │ ├── Final_warped_image : Final warped image (result)
   │ ├── Warped_images : Warped_images (png)
   │ ├── Intermediate_Disparity : Disparities of Each images (input)  
   │ └── agg_warped_image*{date}.png # final output
