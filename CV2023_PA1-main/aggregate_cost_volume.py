@@ -2,8 +2,8 @@ import numpy as np
 import sys
 from tqdm import tqdm
 
-MEMO = -np.ones((24, 215, 328))  # Memoization for DP
-INF = 999999999  # Set Infinte value
+INF = 99999  # Set Infinte value
+MEMO = np.full((24, 215, 328), INF, dtype=np.int64)  # Memoization for DP
 
 
 def aggregate_cost_volume(cost_volume, d=24):
@@ -18,7 +18,7 @@ def aggregate_cost_volume(cost_volume, d=24):
     global MEMO  # Set Global value
 
     # Set Expected Cost Volume's shape (d, H, W)
-    aggregated_costs = np.full(cost_volume.shape, INF)
+    aggregated_costs = np.full(cost_volume.shape, INF,  dtype=np.int64)
 
     # Generate Coordinate information for each pixel (current state); custom function을 만듬
     forward_pass = generate_cor_pass(cost_volume, 1)
@@ -36,35 +36,21 @@ def aggregate_cost_volume(cost_volume, d=24):
     # 방향을 기준으로 forward pass와 backward pass를 나눠서 진행
     for r in tqdm(forward_direction):
 
-        MEMO = np.full((24, 215, 328), INF)  # 각 방향 마다 메모 초기화
+        MEMO = np.full((24, 215, 328), INF, dtype=np.int64)  # 각 방향 마다 메모 초기화
 
-        # for k in tqdm(range(d)):
-        #     for _, (dy, dx) in enumerate(forward_pass):
-
-        #         # cost volume shape : (24, 215, 328)
-        #         # forward_pass shape : (dy, dx); (215, 328)
-
-        #         aggregated_costs[k, dy, dx] = SGM(cost_volume, dy, dx, k, r=r)
-        # aggregated_volume.append(aggregated_costs)
         for _, (k, dy, dx) in enumerate(forward_pass):
             aggregated_costs[k, dy, dx] = SGM(cost_volume, dy, dx, k, r=r)
         aggregated_volume.append(aggregated_costs)
 
     for r in tqdm(backward_direction):
 
-        MEMO = np.full((24, 215, 328), INF)  # 메모 초기화
+        MEMO = np.full((24, 215, 328), INF, dtype=np.int64)  # 메모 초기화
 
-        # for k in tqdm(range(d)):
-        #     for _, (dy, dx) in reversed(list(enumerate(backward_pass))):  # Backward는 반대로 진행
-        #         aggregated_costs[k, dy, dx] = SGM(
-        #             cost_volume, dy, dx, 23-k, r=r)
-        # aggregated_volume.append(aggregated_costs)
         for _, (k, dy, dx) in reversed(list(enumerate(backward_pass))):
             aggregated_costs[k, dy, dx] = SGM(cost_volume, dy, dx, k, r=r)
         aggregated_volume.append(aggregated_costs)
 
-    aggregated_volume = np.sum(aggregated_volume, axis=0)
-    return aggregated_volume
+    return np.sum(aggregated_volume, axis=0)
 
 
 def SGM(cost_volume, dy, dx, d, r, p1=5, p2=150, size=1):
@@ -87,24 +73,25 @@ def SGM(cost_volume, dy, dx, d, r, p1=5, p2=150, size=1):
 
     if (dy < 0) | (dx < 0) | (dy > 214) | (dx > 327) | (d < 0) | (d > 23):
         cost = INF
-        MEMO[d, dy, dx] = cost
         return cost
 
     else:
-        # 이미 메모가 되어있는 경우 메모된 값을 반환
-        if check_memo(d, dy, dx) != INF:
-            return MEMO[d, dy, dx]
+        memo = check_memo(d, dy, dx)
+        if memo != INF:  # INF값이면 메모가 안된 것으로 간주
+            return memo  # 이미 메모가 되어있는 경우 메모된 값을 반환
 
         # 현재 state의 cost volume에서의 값과 이전 state의 cost volume에서의 값들을 비교해서 최소값을 구함
         min_value_list = []
-        for i in range(24):  # 이전버전으로 갈거면 328-d
+        for i in range(24):  # 전체 depth를 비교
             temp = check_memo(i, dy-r[0], dx-r[1])
             min_value_list.append(temp)
         min_value = quick_sort(min_value_list[d:])  # d부터 끝까지만 비교
 
-        cost = (cost_volume[d, dy, dx] + quick_sort([check_memo(d-r[0], dy, dx-r[1]), check_memo(
-            d-r[0], dy-1, dx-r[1])+p1, check_memo(d-r[0], dy+1, dx-r[1])+p1, min_value+p2]) - quick_sort(min_value_list))  # 전체 depth를 비교
+        cost = (cost_volume[d, dy, dx] + quick_sort([check_memo(d, dy-r[0], dx-r[1]), check_memo(
+            d-1, dy-r[0], dx-r[1])+p1, check_memo(d+1, dy-r[0], dx-r[1])+p1, min_value+p2]) - quick_sort(min_value_list))  # 전체 depth를 비교
 
+        # if cost > INF:
+        #     cost = INF
         # 구한 cost를 메모에 저장
         MEMO[d, dy, dx] = cost
 

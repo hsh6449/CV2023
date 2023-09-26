@@ -14,8 +14,10 @@ image_r = cv2.imread('input/07_noise25.png', 0)
 image_lm = cv2.imread('input/01_noise25.png', -1)
 
 
-# left_cost_volume, right_cost_volume, left_disparity, right_disparity = SAD(
-#     image_l, image_c, 24)
+left_cost_volume, right_cost_volume, left_disparity, right_disparity = SAD(
+    image_l, image_c, 24)
+
+print(generate_cor_pass(left_cost_volume, size=1))
 
 # left_cost_volume2, right_cost_volume2, left_disparity2, right_disparity2 = SSD(
 #     image_l, image_c, 24)
@@ -26,10 +28,10 @@ image_lm = cv2.imread('input/01_noise25.png', -1)
 
 # agg_temp = np.min(left_cost_volume, axis=0)
 
-sample_disparity = np.load(
-    "output/Final_Disparity/agg_disparity_1695702462.5508597.npy")
-cv2.imshow("disparity", (sample_disparity*10).astype(np.uint8))
-cv2.waitKey(0)
+# sample_disparity = np.load(
+#     "output/Final_Disparity/agg_disparity_1695702462.5508597.npy")
+# cv2.imshow("disparity", (sample_disparity*10).astype(np.uint8))
+# cv2.waitKey(0)
 
 # test code
 # forward_pass = generate_cor_pass(left_cost_volume, size=1)

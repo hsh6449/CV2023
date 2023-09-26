@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-INF = 999999999  # Set Infinte value
+INF = 99999  # Set Infinte value
 
 
 def SAD(left_image, right_image, d):
@@ -22,15 +22,15 @@ def SAD(left_image, right_image, d):
         (d, 215, 328), INF)
     right_cost_volume = np.full((d, 215, 328), INF)
 
-    # 왼쪽에서 오른쪽으로 이동하면서 disparity 계산
     for i in range(d):
-        disparity = left_image[:, i:] - right_image[:, : 328-i]
-        left_cost_volume[i, :, i:] = abs(disparity)
 
-    # 오른쪽에서 왼쪽으로 이동하면서 disparity 계산
-    for i in range(d):
-        disparity = right_image[:, i:] - left_image[:, : 328-i]
-        right_cost_volume[i, :, :328-i] = abs(disparity)
+        # 왼쪽에서 오른쪽으로 이동하면서 disparity 계산
+        disparity_l = left_image[:, i:] - right_image[:, : 328-i]
+        left_cost_volume[i, :, i:] = abs(disparity_l)
+
+        # 오른쪽에서 왼쪽으로 이동하면서 disparity 계산
+        disparity_r = right_image[:, i:] - left_image[:, : 328-i]
+        right_cost_volume[i, :, :328-i] = abs(disparity_r)
 
     # SAD를 이용해 계산한 Disparity
     left_disparity = left_cost_volume.argmin(axis=0)
@@ -55,15 +55,15 @@ def SSD(left_image, right_image, d):
     left_cost_volume = np.full((d, 215, 328), INF)
     right_cost_volume = np.full((d, 215, 328), INF)
 
-    # 왼쪽에서 오른쪽으로 이동하면서 disparity 계산
     for i in range(d):
-        disparity = left_image[:, i:] - right_image[:, : 328-i]
-        left_cost_volume[i, :, i:] = np.square(disparity)
 
-    # 오른쪽에서 왼쪽으로 이동하면서 disparity 계산
-    for i in range(d):
-        disparity = right_image[:, i:] - left_image[:, : 328-i]
-        right_cost_volume[i, :, :328-i] = np.square(disparity)
+        # 왼쪽에서 오른쪽으로 이동하면서 disparity 계산
+        disparity_l = left_image[:, i:] - right_image[:, : 328-i]
+        left_cost_volume[i, :, i:] = np.square(disparity_l)
+
+        # 오른쪽에서 왼쪽으로 이동하면서 disparity 계산
+        disparity_r = right_image[:, i:] - left_image[:, : 328-i]
+        right_cost_volume[i, :, :328-i] = np.square(disparity_r)
 
     # SSD를 이용해 계산한 Disparity
     left_disparity = left_cost_volume.argmin(axis=0)

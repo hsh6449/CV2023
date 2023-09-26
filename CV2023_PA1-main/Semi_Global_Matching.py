@@ -40,6 +40,8 @@ if __name__ == "__main__":
     mod_list = [cv2.imread(file, 0)
                 for file in glob.glob("input/*.png")]  # disparity 계산을 위한 gray scale 이미지
 
+    mod_list = [img.astype(np.int32) for img in mod_list]
+
     ground_truth = cv2.imread("target/gt.png", -1)  # ground truth 이미지
 
     d = 24  # Depth
@@ -52,7 +54,7 @@ if __name__ == "__main__":
             aggregated_disparity = semi_global_matching(
                 mod_list[i], mod_list[3], d, 'right')
             cv2.imwrite(
-                f"/output/Intermediate_Disparity/agg_disparity_{i}_{time.time()}.png", aggregated_disparity*int(255/24))
+                f"output/Intermediate_Disparity/agg_disparity_{i}_{time.time()}.png", aggregated_disparity*int(255/24))
             agg_dis_list.append(aggregated_disparity)
 
         elif i > 3:   # i > 3, right image case
