@@ -12,7 +12,7 @@ import cv2
 def main():
 
     eng = matlab.engine.start_matlab()
-    eng.addpath(r'path_to_functions you want to use', nargout=0) 
+    eng.addpath('functions/', nargout=0) 
     end = time.time()
     for i in range(100):
         a = np.random.rand(3,5).tolist()

@@ -32,8 +32,11 @@ print(descriptors.shape) # (64420,128)
 matches = cv2.BFMatcher().knnMatch(descriptors, descriptors2, k=2)
 # print(matches)
 # sorted_matches = sorted(matches, key = lambda x : x.distance)
-res = cv2.drawMatchesKnn(im1, keypoints, im2, keypoints2, matches, None, flags = 2).resize((1500,1000), fx=0.5, fy=0.5)
-
+# res = cv2.drawMatchesKnn(im1, keypoints, im2, keypoints2, matches, None, flags = 2)#.resize((1500,1000))
  
-cv2.imshow('res', res)
-cv2.waitKey(0)
+# cv2.imshow('res', res)
+# cv2.waitKey(0)
+
+eng = matlab.engine.start_matlab()
+eng.addpath('functions/', nargout=0) 
+eng.PerspectiveThreePoint()
