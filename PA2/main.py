@@ -33,6 +33,10 @@ def main():
     kinv = np.linalg.inv(k)
 
     iter = 0
+
+    inlinear34 = np.load("two_view_recon_info/inlinear.npy")
+    points_3d34 = np.load("two_view_recon_info/3D_points.npy")
+
     threeDinof = {}
     threedpoints = []
 
@@ -154,21 +158,24 @@ def main():
         np.save(f"temp_result/inlinear_{iter}.npy", inlinear_out)
 
         # reconstruct 3D points
-        points3D, threeDinof = Traiangulation(kp1, 
-                                  kp2,  
-                                  R, 
-                                  T, 
-                                  p1, 
-                                  p2,
-                                  cor, 
-                                  cor_2, 
-                                  cor_3, 
-                                  kinv,
-                                  inlinear_out,
-                                  threeDinof,)
+        points3D, threeDinof = Traiangulation(
+            matches, # matching된 포인트로 inlinear를 만들어 주기  **** TODO**** but mc1, mc2가 있고 ransac 첫부분에서 만들어 주므로 check해보고 이걸 이용해서 traingulation 짜보기 
+            kp1, 
+            kp2,  
+            R, 
+            T, 
+            p1, 
+            p2,
+            cor, 
+            cor_2, 
+            cor_3,
+            k, 
+            kinv,
+            inlinear_out,
+            threeDinof,)
         
         # save 3D points
-        np.save(f"temp_result/3D_points_{iter}.npy", points3D)
+        np.save(f"temp_result/3D_points_{i}.npy", points3D)
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points3D)
         o3d.io.write_point_cloud(f"result/3D_points_{iter}.ply", pcd)

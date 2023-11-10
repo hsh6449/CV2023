@@ -111,6 +111,12 @@ def rancsac(matches, kp1, kp2, mc1, mc2, k, kinv, p1=None, p2=None, inlinear=Non
     
     inlinear_index = [np.where(inlinear==i) for i in matched_index]
     # pdb.set_trace()
+    
+
+    ### inlinear 기반으로 matching된 점들을 cor에 저장
+    ## cor : 3D point
+    ## cor_2 : 2D point, 첫번째 이미지
+    ## cor_3 : 2D point, 두번째 이미지
 
     cor = []
     cor_2 = []
@@ -119,19 +125,19 @@ def rancsac(matches, kp1, kp2, mc1, mc2, k, kinv, p1=None, p2=None, inlinear=Non
     for i in inlinear_index:
         if i[0].size > 0: # empty list는 pass
             inlinear_index_out.append(i[0][0])
-            cor.append(points_3d[i]) # matched 된 3D point -> 
+            cor.append(points_3d[i]) # matched 된 3D point 
             cor_2.append(kp1[i]) # 3D point에 대응되는 2D point, 첫번째 이미지
             cor_3.append(kp2[i]) # 3D point에 대응되는 2D point, 두번째 이미지 
 
-    threshold = 0.8  # Set your desired threshold
+    threshold = 0.7  # Set threshold
 
     best_inliers = []
     best_R = None
     best_T = None
 
-    for _ in range(100):  # Repeat RANSAC for a certain number of iterations
-        # Randomly select 3 keypoints and estimate camera pose
+    for _ in range(10000):  # Repeat RANSAC for a certain number of iterations
 
+        # Randomly select 3 keypoints and estimate camera pose
         idx = np.random.choice(range(0, len(cor)), 3, replace=False)
                 
         random_point = np.array(cor)[idx] # world coordinate, 3D
@@ -140,7 +146,6 @@ def rancsac(matches, kp1, kp2, mc1, mc2, k, kinv, p1=None, p2=None, inlinear=Non
         sampled_points_3D = random_point.reshape(3, 3)
 
         # Estimate camera pose using the 3 selected keypoints
-
         nnc = np.ones(3)
         n_cor = []
         for i, p in enumerate(sampled_points_2D):
@@ -153,31 +158,37 @@ def rancsac(matches, kp1, kp2, mc1, mc2, k, kinv, p1=None, p2=None, inlinear=Non
 
         camera_pose = find_camera_pose(input_data)
 
-        while (camera_pose.size == 0) or (camera_pose[:3,:4].shape[0] != 3) or (camera_pose[:3,:4].shape[1] != 4):
+        ## camera pose가 값이 없을 수도 있기 때문에 값이 없는 경우에 다시 구하기
+        try : 
+            while (camera_pose.size == 0) : #or (camera_pose[:3,:4].shape[0] != 3) or (camera_pose[:3,:4].shape[1] != 4):
 
-            idx = np.random.choice(range(0, len(cor)), 3, replace=False)
-                
-            random_point = np.array(cor)[idx] # world coordinate, 3D
-            random_point_2 = np.array(cor_2)[idx] # image coordinate, 2D 
-            sampled_points_2D = random_point_2
-            sampled_points_3D = random_point.reshape(3, 3)
+                idx = np.random.choice(range(0, len(cor)), 3, replace=False)
+                    
+                random_point = np.array(cor)[idx] # world coordinate, 3D
+                random_point_2 = np.array(cor_2)[idx] # image coordinate, 2D 
+                sampled_points_2D = random_point_2
+                sampled_points_3D = random_point.reshape(3, 3)
 
-            # Estimate camera pose using the 3 selected keypoints
+                # Estimate camera pose using the 3 selected keypoints
+                nnc = np.ones(3)
+                n_cor = []
+                for i, p in enumerate(sampled_points_2D):
+                    nnc[:2] = cor_2[idx[i]] 
+                    temp = np.dot(kinv, nnc.T) #p norm
+                    n_cor.append(temp.reshape(3))
 
-            nnc = np.ones(3)
-            n_cor = []
-            for i, p in enumerate(sampled_points_2D):
-                nnc[:2] = cor_2[idx[i]] # keypoints가 맞나...?
-                temp = np.dot(kinv, nnc.T) #p norm
-                n_cor.append(temp.reshape(3))
+                n_cor = np.array(n_cor)
+                input_data = np.hstack((n_cor, sampled_points_3D))
+                camera_pose = find_camera_pose(input_data)
 
-            n_cor = np.array(n_cor)
-            input_data = np.hstack((n_cor, sampled_points_3D))
-            camera_pose = find_camera_pose(input_data)
+                if camera_pose.size != 0:
+                    break
             
-        if p1 is None:
-            # pdb.set_trace()
-            p1 = camera_pose[:3,:4]
+            ## 3,4번 이미지가 아닌경우에는 camerapose를 이용해서 p1을 구함
+            if p1 is None:
+                p1 = camera_pose[:3,:4]
+        except:
+            break
 
         try :
             R = camera_pose[:3,:3]
@@ -193,9 +204,9 @@ def rancsac(matches, kp1, kp2, mc1, mc2, k, kinv, p1=None, p2=None, inlinear=Non
                 projected_point = np.dot(kinv,np.dot(k, p1).dot(np.append(world_to_camera,1)))
                 projected_point2 = np.dot(kinv, np.dot(k, p2).dot(np.append(world_to_camera,1)))
 
-                print("pro1" , projected_point)
-                print("pro2" , projected_point2)
-                print("\n")
+                # print("pro1" , projected_point)
+                # print("pro2" , projected_point2)
+                # print("\n")
 
                 norm_1 = np.dot(kinv, np.append(cor_2[i],1).T)
                 norm_2 = np.dot(kinv, np.append(cor_3[i],1).T)
@@ -209,7 +220,7 @@ def rancsac(matches, kp1, kp2, mc1, mc2, k, kinv, p1=None, p2=None, inlinear=Non
             print("reproj_error: ", np.mean(reproj_error))
 
             # Count inliers based on the threshold
-            inliers = [i for i in range(len(cor_2)) if reproj_errors[i] < threshold] # inlier는 인덱스 
+            inliers = [i for i in range(len(cor_2)) if reproj_errors[i] < threshold] # inlier는 인덱스, 개수만 세면 되므로  
 
             if len(inliers) > len(best_inliers):
                 # Update the best model
@@ -227,7 +238,7 @@ def rancsac(matches, kp1, kp2, mc1, mc2, k, kinv, p1=None, p2=None, inlinear=Non
     return best_R, best_T, p1, p2, cor, cor_2, cor_3, inlinear_index_out
 
 
-def Traiangulation(kp1, kp2, R, T, p1, p2, cor, cor_2, cor_3, kinv,inlinear_index, threeDinfo):
+def Traiangulation(matches, kp1, kp2, R, T, p1, p2, cor, cor_2, cor_3, k , kinv, inlinear_index, threeDinfo):
     # reconstruct 3D points (Traiangulation)
     # kp1, kp2: list of KeyPoint objects
     # matches: list of DMatch objects
@@ -244,6 +255,7 @@ def Traiangulation(kp1, kp2, R, T, p1, p2, cor, cor_2, cor_3, kinv,inlinear_inde
 
     threeD = []
     reproj_errors = []
+    # pdb.set_trace()
     for i in range(len(cor_2)):
         x1[:2] = cor_2[i]
         x2[:2] = cor_3[i]
@@ -262,26 +274,52 @@ def Traiangulation(kp1, kp2, R, T, p1, p2, cor, cor_2, cor_3, kinv,inlinear_inde
         _, _, V = np.linalg.svd(A)
 
         X = V[-1,:3] / V[-1,-1] # 3D point, X
-        print(X)
+        # print(X)
 
         threeD.append(X)
 
         ## examination ##
         
-        reproj_error = np.sqrt(np.linalg.norm(X - cor[i])) # 이부분을 다시 생각해봐 
-        reproj_errors.append(reproj_error) 
+        # reproj_error = np.sqrt(np.linalg.norm(X - cor[i])) # 이부분을 다시 생각해봐
+        # reproj_errors.append(reproj_error)
+
+        reproj_error = 0
+        threshold = 10
         
         
         # pdb.set_trace()
         if int(inlinear_index[i]) in threeDinfo : # 이미 존재하는 3D point
+
+            if R is None:
+                pdb.set_trace()
+            if T is None:   
+                pdb.set_trace()
+
+            proj2D = np.dot(R, cor[i].T).T + T # 레퍼런스 
+            proj2D2 = np.dot(R, np.mean(threeDinfo[int(inlinear_index[i])]["3D"]).T).T + T # 추정값 
+
+            # if TypeError:
+            #     pdb.set_trace()
+            # if ValueError:
+            #     pdb.set_trace()
+            # if IndexError:
+            #     pdb.set_trace()
+            # if np.isnan(proj2D).any():
+            #     pdb.set_trace()
+            # if np.isnan(proj2D2).any():
+            #     pdb.set_trace()
+            
+            reproj_error = np.sqrt(np.linalg.norm(proj2D- proj2D2)) # 이미지로 투영시켜서 다시해야함
+            # print(reproj_error)
+
             if threeDinfo[int(inlinear_index[i])]["valid"] == True: # valid한 3D point
-                if np.sqrt(np.linalg.norm(np.mean(threeDinfo["3D"])-X)) < 0.75: # reproj_error가 0.75보다 작으면 
+                if reproj_error < threshold: # reproj_error가 0.75보다 작으면 
                     threeDinfo[int(inlinear_index[i])]["3D"].append(X)
                     threeDinfo[int(inlinear_index[i])]["valid"] = True
                 else: # reproj_error가 0.75보다 크면
                     pass
             else:
-                if np.sqrt(np.linalg.norm(np.mean(threeDinfo["3D"])-X)) < 0.75:
+                if reproj_error < threshold:
                     threeDinfo[int(inlinear_index[i])]["3D"].append(X)
                     threeDinfo[int(inlinear_index[i])]["valid"] = True
                 else : 
@@ -289,17 +327,21 @@ def Traiangulation(kp1, kp2, R, T, p1, p2, cor, cor_2, cor_3, kinv,inlinear_inde
 
         else : # 존재하지 않는 3D point
             threeDinfo[int(inlinear_index[i])] =  {
-                "3D" : [], # 3D point가 여러개일 수 있으므로 list로 저장
+                "3D" : [X], # 3D point가 여러개일 수 있으므로 list로 저장
                 "valid" : False, # valid한 3D point인지 아닌지
             }
 
-            if reproj_error < 0.75:
-                threeDinfo[int(inlinear_index[i])]["3D"].append(X)
-                threeDinfo[int(inlinear_index[i])]["valid"] = True
-            else:
-                pass
+            # reproj_error = np.sqrt(np.linalg.norm(cor[i] - X)) # 이미지로 투영시켜서 다시해야함 + 3D point가 없으므로 cor[i]로 계산(이건 고민해봐야함)
+            # print(reproj_error)
 
-    good_point = [threeD[i] for i in range(len(reproj_errors)) if reproj_errors[i] < 0.75]
+            # if reproj_error < threshold :
+            #     threeDinfo[int(inlinear_index[i])]["3D"].append(X)
+            #     threeDinfo[int(inlinear_index[i])]["valid"] = True
+            # else:
+            #     pass
+
+    good_point = [threeDinfo[int(inlinear_index[i])]["3D"] for i in range(len(reproj_errors)) if reproj_errors[i] < threshold]
+    # print("good poinrt : ", len(good_point))
 
     # threeD = np.array(threeD)
     
