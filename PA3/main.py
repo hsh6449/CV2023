@@ -10,7 +10,7 @@ from segmentation_models_pytorch.datasets import SimpleOxfordPetDataset
 
 # import your model or define here
 from torchvision import transforms
-from model import UNet
+from model import Unet
 
 # If you want to use args, you can use
 import argparse
@@ -46,7 +46,7 @@ class SegDataset(torch.utils.data.Dataset):
 
 # Download data
 root = "."
-# SimpleOxfordPetDataset.download(root)
+SimpleOxfordPetDataset.download(root)
 
 train_dataset = SimpleOxfordPetDataset(root, "train")
 valid_dataset = SimpleOxfordPetDataset(root, "valid")
