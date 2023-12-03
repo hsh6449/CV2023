@@ -17,7 +17,7 @@ from tqdm import tqdm
 import os
 import pdb
 
-root = "."
+root = "./PA3" # PA3
 # SimpleOxfordPetDataset.download(root)
 
 train_dataset = SimpleOxfordPetDataset(root, "train")
@@ -30,28 +30,38 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 n_cpu = os.cpu_count()
 
-train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=n_cpu)
-valid_dataloader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=n_cpu)
+train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=1)
+valid_dataloader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=1)
 
 model = Unet().to(device)
 optimizer = optim.Adam(model.parameters(), lr=1e-4)
-epochs = 10
+epochs = 1
 
-print(next(iter(train_dataloader)))
+# print(next(iter(train_dataloader)))
+
+
 def train():
   for epoch in tqdm(range(epochs)):
-      for idx, (x, y) in enumerate(train_dataloader):
+      for idx, samples in enumerate(train_dataloader):
           optimizer.zero_grad()
-          logits = model(x.to(device))
+
+          x = samples["image"].to(device).to(torch.float32)
+          y = samples["mask"].to(device)
+
+          logits = model(x)
           loss = F.binary_cross_entropy_with_logits(logits, y)
           loss.backward()
           optimizer.step()
-          print(f"Epoch: {epoch}, Iter: {idx}, Loss: {loss.item()}")
 
-      for idx, (x, y) in enumerate(valid_dataloader):
+          if idx % 10 == 0:
+            print(f"Epoch: {epoch+1}, Iter: {idx}, Loss: {loss.item()}")
+
+      for idx, samples in enumerate(valid_dataloader):
+          x = samples["image"].to(device).to(torch.float32)
+          y = samples["mask"].to(device)
           logits = model(x)
           loss = F.binary_cross_entropy_with_logits(logits, y)
-          print(f"Epoch: {epoch}, Iter: {idx}, Val Loss: {loss.item()}")
+          print(f"Epoch: {epoch+1}, Iter: {idx}, Val Loss: {loss.item()}")
 
 
 def plot_img(x, y, y_pred):
@@ -63,11 +73,15 @@ def plot_img(x, y, y_pred):
 
 def test():
     model.eval()
-    x, y = valid_dataset[0]
-    y_pred = model(x.unsqueeze(0))
+    sample = valid_dataset[0]
+
+    x = sample["image"]
+    y = sample["mask"]
+
+    y_pred = model(x)
     y_pred = torch.sigmoid(y_pred)
     y_pred = y_pred.squeeze(0)
-    y_pred = y_pred.squeeze(0)
+    
     y_pred = y_pred.detach().numpy()
     y_pred = y_pred > 0.5
     plot_img(x, y, y_pred)
