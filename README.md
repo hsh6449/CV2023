@@ -1,4 +1,4 @@
 # CV2023
 
-GIST CV2023 assignment
+GIST CV23 ass
 env - test
