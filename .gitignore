@@ -2,3 +2,7 @@ PA2/cv/
 
 PA3/images/
 PA3/annotations/
+PA3/coarse_seg/
+PA3/affinity/
+PA3/lightning_logs/
+PA3/unet_seg/
