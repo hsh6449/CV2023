@@ -9,7 +9,8 @@ from torch.utils.data import DataLoader, Dataset
 from segmentation_models_pytorch.datasets import SimpleOxfordPetDataset
 
 # import your model or define here
-from model import Unet_affinity, CSPN
+from model import Unet_affinity, CSPN, DYSPN, Unet_d
+import time 
 
 # If you want to use args, you can use
 import argparse
@@ -33,9 +34,9 @@ def fix_seed(seed=0):
 class SegDataset(Dataset): 
   def __init__(self, split='train', seg_path='coarse_seg'):
 
-    if split == 'train':
+    if (split == 'train') or (split == 'train_dyspn'):
         self.dataset = train_dataset
-    elif split == 'valid':
+    elif (split == 'valid') or (split == 'valid_dyspn'):
         self.dataset = valid_dataset
 
     self.seg_path = seg_path
@@ -60,36 +61,73 @@ valid_dataset = SimpleOxfordPetDataset(root, "valid")
 ### For CSPN
 train_dataset_seg = SegDataset(split='train')
 valid_dataset_seg = SegDataset(split='valid')
-train_dataloader_seg = DataLoader(train_dataset_seg, batch_size=8, shuffle=True, num_workers=n_cpu)
-valid_dataloader_seg = DataLoader(valid_dataset_seg, batch_size=1, shuffle=False, num_workers=n_cpu)
+train_dataloader_seg = DataLoader(train_dataset_seg, batch_size=8, shuffle=True, num_workers=2)
+valid_dataloader_seg = DataLoader(valid_dataset_seg, batch_size=1, shuffle=False, num_workers=2)
 print(f"Train size: {len(train_dataset_seg)}")
 print(f"val size: {len(valid_dataset_seg)}")
 
 
 class Model(pl.LightningModule):
-    def __init__(self, args):
+    def __init__(self, args, c = True):
         super().__init__()
-         # Define all the models you want to use here
-         # TODO
-        self.model = Unet_affinity()
-        # freeze backbone layers
-        # for param in self.model.parameters():
-        #     param.requires_grad = False
 
-        self.cspn = CSPN()
+        self.args = args
+        # freeze backbone layers
+
+        self.c = c
+        if c == True: # c = True -> CSPN, c = False -> DYSPN
+            self.model = Unet_affinity()
+            # self.model = smp.Unet(
+            #     encoder_name="resnet34",
+            #     encoder_weights=None,
+            #     in_channels=4,
+            #     classes=9,
+            # )
+            self.refine = CSPN()
+        else:
+            self.model = Unet_d()
+            self.refine = DYSPN()
 
         self.loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
         self.outputs = []
+        self.num = 0
+        self.mode = "train"
 
-    def forward(self, image, seg, coarse_seg, iter=5):
-
-        for i in range(iter):
+    def forward(self, image, seg, coarse_seg, iter, eval=False):
+        
+        if eval:
+            # evaluation 할 때 각 iteration 결과 저장 
+            if self.num == 3312:
+                self.mode = "valid"
+                self.num = 0
+            
+            result = []
             affinity = self.model(image)
-            seg = self.cspn(affinity, seg, coarse_seg)
 
-        return seg
+            for i in range(iter):
 
-    def shared_step(self, batch, stage):
+                seg = self.refine(affinity, seg, coarse_seg,i)
+                # temp = seg.sigmoid()
+                # temp = (temp > 0.5).float()
+                result.append(seg.to("cpu").detach().numpy())
+            
+            if self.c == True:
+                np.save(f"intermidiate_result/{self.mode}/{self.num}.npy", np.array(result))
+            else:
+                np.save(f"intermidiate_result/{self.mode}_dyspn/{self.num}.npy", np.array(result)) # iteration result 저장 
+            self.num += 1
+
+            return seg
+        
+        else:
+            affinity = self.model(image) 
+
+            for i in range(iter):
+                seg = self.refine(affinity, seg, coarse_seg, i)
+
+            return seg
+
+    def shared_step(self, batch, stage, eval=False):
         # This is for coarse segmentation
         #dic, seg_init = batch
         #image = dic['image']
@@ -105,18 +143,17 @@ class Model(pl.LightningModule):
         assert seg.ndim == 4
         assert seg.max() <= 1.0 and seg.min() >= 0
 
-        input_batch = torch.cat((image, seg), dim=1)
+        input_batch = torch.cat((image, seg), dim=1) # (b, 4, h, w)
 
-        logits_mask = self.forward(input_batch, seg, seg, 5)
+        logits_mask = self.forward(input_batch, seg, seg, 6, eval)
 
 
-        loss = self.loss_fn(logits_mask, seg)
+        loss = self.loss_fn(logits_mask, dic["mask"])
 
         prob_mask = logits_mask.sigmoid()
         pred_mask = (prob_mask > 0.5).float()
-        # self.outputs = pred_mask
 
-        tp, fp, fn, tn = smp.metrics.get_stats(pred_mask.long(), seg.long(), mode="binary")
+        tp, fp, fn, tn = smp.metrics.get_stats(pred_mask.long(), dic["mask"].long(), mode="binary")
 
         self.outputs.append({
             "loss": loss,
@@ -125,6 +162,8 @@ class Model(pl.LightningModule):
             "fn": fn,
             "tn": tn,
         })
+
+
 
         return loss
 
@@ -167,22 +206,24 @@ class Model(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=0.001)
 
-def eval():
+def eval(mode=True):
     model.eval()
     
     model.to(device)
-    train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=False, num_workers=1)
+    train_dataloader_seg = DataLoader(train_dataset_seg, batch_size=1, shuffle=False, num_workers=1)
 
-    for i, (sample, seg) in enumerate(train_dataloader):
-        x = torch.tensor(sample["image"], dtype=torch.float32).to(device)
-        y = torch.tensor(seg).to(device)
-        y = y.squeeze(0)
+    for i, (sample, seg) in enumerate(train_dataloader_seg):
+        x = torch.tensor(sample["image"], dtype=torch.float32).to(device) # 1, 3, 256, 256
+        y = torch.tensor(sample["mask"]).to(device) # 1, 1, 256, 256
+        seg = torch.tensor(seg).to(device)  # 1, 256, 256
 
-        input_batch = torch.cat((x, y), dim=1)
+        input_batch = torch.cat((x, seg), dim=1) # 1, 4, 256, 256
+        # seg = seg.squeeze(0)
 
-        y_pred = model(input_batch, y, y, 5)
+        y_pred = model(input_batch, seg, seg, 5, eval=True)
         y_pred = torch.sigmoid(y_pred)
         y_pred = y_pred.squeeze(0)
+        y = y.squeeze(0)
 
         y_pred_binary = (y_pred > 0.5).to(torch.float32)
         y_true_binary = (y > 0.0).to(torch.float32)
@@ -193,18 +234,24 @@ def eval():
         dataset_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro")
 
         print(f"Train - Epoch: {trainer.current_epoch}, Image {i}, IoU: {per_image_iou.item()}")
-        np.save(f"affinity/train/{i}.npy", y_pred_binary.to("cpu").detach().numpy())
+
+        if mode is True:
+            np.save(f"affinity/train/{i}.npy", y_pred_binary.to("cpu").detach().numpy())
+        if mode == False:
+            np.save(f"affinity/train_dyspn/{i}.npy", y_pred_binary.to("cpu").detach().numpy())
 
     for i, (sample, seg) in enumerate(valid_dataloader_seg):
         x = torch.tensor(sample["image"], dtype=torch.float32).to(device)
-        y = torch.tensor(seg).to(device)
-        y = y.squeeze(0)
+        y = torch.tensor(sample["mask"]).to(device)
+        seg = torch.tensor(seg).to(device)
 
-        input_batch = torch.cat((x, y), dim=1)
+        input_batch = torch.cat((x, seg), dim=1)
+        # seg = seg.squeeze(0)
 
-        y_pred = model(input_batch, y, y, 5)
+        y_pred = model(input_batch, seg, seg, 5, eval=True)
         y_pred = torch.sigmoid(y_pred)
         y_pred = y_pred.squeeze(0)
+        y = y.squeeze(0)
 
         y_pred_binary = (y_pred > 0.5).to(torch.float32)
         y_true_binary = (y > 0.5).to(torch.float32)
@@ -215,15 +262,21 @@ def eval():
         dataset_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro")
 
         print(f"Valid - Epoch: {trainer.current_epoch}, Image {i}, IoU: {per_image_iou.item()}")
-        np.save(f"affinity/valid/{i}.npy", y_pred_binary.to("cpu").detach().numpy())
+
+        if mode == "cspn":
+            np.save(f"affinity/valid/{i}.npy", y_pred_binary.to("cpu").detach().numpy())
+        if mode == "dyspn":
+            np.save(f"affinity/valid_dyspn/{i}.npy", y_pred_binary.to("cpu").detach().numpy())
 
 if __name__ == "__main__":
     fix_seed(0)
 
-    model = Model(args)
+    c = True # c = True -> CSPN, c = False -> DYSPN
+
+    model = Model(args, c=c)
     trainer = pl.Trainer(
         # gpus=1,
-        max_epochs=3,
+        max_epochs=10,
     )
     trainer.fit(
         model,
@@ -231,4 +284,4 @@ if __name__ == "__main__":
         val_dataloaders=valid_dataloader_seg,
     )
 
-    eval()
+    eval(mode=c)

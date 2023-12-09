@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from segmentation_models_pytorch.datasets import SimpleOxfordPetDataset
 
 # import your model or define here
-from model import Unet, CSPN
+from model import Unet
 
 # If you want to use args, you can use
 import argparse
@@ -60,18 +60,10 @@ n_cpu = os.cpu_count()
 train_dataset = SimpleOxfordPetDataset(root, "train")
 valid_dataset = SimpleOxfordPetDataset(root, "valid")
 
-# train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=n_cpu)
-# valid_dataloader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=n_cpu)
-# print(f"Train size: {len(train_dataset)}")
-# print(f"val size: {len(valid_dataset)}")
-
-### For CSPN
-train_dataset_seg = SegDataset(split='train')
-valid_dataset_seg = SegDataset(split='valid')
-train_dataloader_seg = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=n_cpu)
-valid_dataloader_seg = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=n_cpu)
-print(f"Train size: {len(train_dataset_seg)}")
-print(f"val size: {len(valid_dataset_seg)}")
+train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=False, num_workers=2)
+valid_dataloader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=2)
+print(f"Train size: {len(train_dataset)}")
+print(f"val size: {len(valid_dataset)}")
 
 
 class Model(pl.LightningModule):
@@ -80,8 +72,11 @@ class Model(pl.LightningModule):
          # Define all the models you want to use here
          # TODO
         self.model = Unet()
+        # self.model = smp.Unet("resnet18", encoder_weights=None, in_channels=3, classes=1)
         self.loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
         self.outputs = []
+        self.epoch = 0
+        self.num = 0
 
     def forward(self, image):
         mask = self.model(image)
@@ -92,6 +87,10 @@ class Model(pl.LightningModule):
         #dic, seg_init = batch
         #image = dic['image']
         #input_batch = torch.cat((image, seg_init), dim=1)
+
+        if self.num == 3312:
+            self.num = 0
+
 
         dic = batch
         image = dic['image'].to(torch.float32)
@@ -109,8 +108,15 @@ class Model(pl.LightningModule):
         logits_mask = self.forward(input_batch)
         loss = self.loss_fn(logits_mask, mask)
 
-        prob_mask = logits_mask.sigmoid()
-        pred_mask = (prob_mask > 0.5).float()
+        if stage == "train":
+            prob_mask = logits_mask.sigmoid()
+            pred_mask = (prob_mask > 0.5).float()
+        if stage == "valid":
+            pred_mask = logits_mask.sigmoid()
+            pred_mask = (pred_mask > 0.5).float()
+
+        
+        np.save(f"coarse_seg/{stage}/{self.num}.npy", pred_mask.to("cpu").detach().numpy())
         # self.outputs = pred_mask
 
         tp, fp, fn, tn = smp.metrics.get_stats(pred_mask.long(), mask.long(), mode="binary")
@@ -122,6 +128,10 @@ class Model(pl.LightningModule):
             "fn": fn,
             "tn": tn,
         })
+
+        self.num += 1
+        if (self.num == 368) and (stage == "valid"):
+            self.num = 0
 
         return loss
 
@@ -142,6 +152,7 @@ class Model(pl.LightningModule):
         }
 
         self.log_dict(metrics, prog_bar=True)
+        self.epoch += 1
 
     def training_step(self, batch, batch_idx):
         return self.shared_step(batch, "train")
@@ -162,12 +173,12 @@ class Model(pl.LightningModule):
         return self.shared_epoch_end("test")
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.001)
+        return torch.optim.Adam(self.parameters(), lr=0.0001)
 
-def eval():
-    model.eval()
+def eval(model):
     
     model.to(device)
+
     train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=False, num_workers=1)
 
     for i, sample in enumerate(train_dataloader):
@@ -176,19 +187,24 @@ def eval():
         y = y.squeeze(0)
 
         y_pred = model(x)
-        y_pred = torch.sigmoid(y_pred)
+        y_pred = y_pred.sigmoid()
         y_pred = y_pred.squeeze(0)
 
-        y_pred_binary = (y_pred > 0.5).to(torch.float32)
-        y_true_binary = (y > 0.0).to(torch.float32)
+        y_pred_binary = (y_pred > 0.45).float()
+        y_true_binary = (y > 0.0).float()
 
         tp, fp, fn, tn = smp.metrics.get_stats(y_pred_binary.long(), y_true_binary.long(), mode="binary")
 
         per_image_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro-imagewise")
-        dataset_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro")
+        dataset_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro")  
 
-        print(f"Train - Epoch: {trainer.current_epoch}, Image {i}, IoU: {per_image_iou.item()}")
+        # y_pred_binary = y_pred_binary.squeeze(0)
+        # y_true_binary = y_true_binary.squeeze(0)
+
         np.save(f"coarse_seg/train/{i}.npy", y_pred_binary.to("cpu").detach().numpy())
+
+        # save iou and miou
+        np.save(f"coarse_seg/train/miou_iou.npy", dataset_iou.to("cpu").detach().numpy().item())
 
     for i, sample in enumerate(valid_dataloader):
         x = torch.tensor(sample["image"], dtype=torch.float32).to(device)
@@ -196,19 +212,24 @@ def eval():
         y = y.squeeze(0)
 
         y_pred = model(x)
-        y_pred = torch.sigmoid(y_pred)
+        y_pred = y_pred.sigmoid()
         y_pred = y_pred.squeeze(0)
 
-        y_pred_binary = (y_pred > 0.5).to(torch.float32)
-        y_true_binary = (y > 0.5).to(torch.float32)
+        y_pred_binary = (y_pred > 0.45).float()
+        y_true_binary = (y > 0.5).float()
 
         tp, fp, fn, tn = smp.metrics.get_stats(y_pred_binary.long(), y_true_binary.long(), mode="binary")
 
         per_image_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro-imagewise")
         dataset_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro")
 
-        print(f"Valid - Epoch: {trainer.current_epoch}, Image {i}, IoU: {per_image_iou.item()}")
+        # y_pred_binary = y_pred_binary.squeeze(0)
+        # y_true_binary = y_true_binary.squeeze(0)
+
         np.save(f"coarse_seg/valid/{i}.npy", y_pred_binary.to("cpu").detach().numpy())
+
+        # save iou and miou
+        np.save(f"coarse_seg/valid/miou_iou.npy", dataset_iou.to("cpu").detach().numpy().item())
 
 if __name__ == "__main__":
     fix_seed(0)
@@ -216,7 +237,7 @@ if __name__ == "__main__":
     model = Model(args)
     trainer = pl.Trainer(
         # gpus=1,
-        max_epochs=10,
+        max_epochs=3,
     )
     trainer.fit(
         model,
@@ -224,5 +245,6 @@ if __name__ == "__main__":
         val_dataloaders=valid_dataloader,
     )
 
-    # eval()
-    eval() 
+    model.eval()
+
+    eval(model) 
