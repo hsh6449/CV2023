@@ -2,6 +2,11 @@
 
 ### Sanha Hwang (20231126)
 
+![Alt text](image.png)
+![Alt text](image-1.png)
+
+(up)-CSPN , (down) - DYSPN
+
 - 본 폴더의 구성은 다음과 같습니다.
 
 ```
